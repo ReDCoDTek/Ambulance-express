@@ -1,4 +1,3 @@
-# Jeu Pygame : Ambulance qui évite des voitures avec système de vies
 import pygame
 import random
 import sys
@@ -13,7 +12,7 @@ pygame.display.set_caption("Ambulance Express")
 clock = pygame.time.Clock()
 
 # Couleurs
-VERT = (16, 128, 0)
+VERT = (16, 0, 0)
 GRIS = (50, 50, 50)
 BLANC = (255, 255, 255)
 ROUGE = (255, 0, 0)
@@ -22,20 +21,20 @@ ROUGE = (255, 0, 0)
 ambulance_img = pygame.transform.scale(pygame.image.load("Ambulance.png"), (40, 50))
 voiture_img = pygame.transform.scale(pygame.image.load("Audi.png"), (80, 90))
 bonus_img = pygame.transform.scale(pygame.image.load("Bonus.png"), (20, 20))
+invincibility_img = pygame.transform.scale(pygame.image.load("Invincibility.png"), (20, 20))  # Image pour le bonus d'invincibilité
 Vie_img = pygame.transform.scale(pygame.image.load("Vie.png"), (20, 20))
+gameover_img = pygame.transform.scale(pygame.image.load("gameover.png"), (600, 1000))
+menu_img = pygame.transform.scale(pygame.image.load("menu.png"), (900, 812))
 # Police
 police = pygame.font.SysFont("Comic Sans MS", 22)
 
 # Sons
 pygame.mixer.init()
 pygame.mixer.music.load("ambulance.mp3")  # Charge la musique de fond
-pygame.mixer.music.play(-1)  # Joue en boucle
+pygame.mixer.music.play(-1)  # Joue en boucle le son 
 collision_sound = pygame.mixer.Sound("crash.wav")  # Charge le son de collision
-bonus_sound = pygame.mixer.Sound("bonus.mp3")  # Charge le son de bonu
+bonus_sound = pygame.mixer.Sound("bonus.mp3")  # Charge le son de bonus
 
-pygame.mixer.quit()
-pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
-     
 # Fonctions
 def dessiner_fond():
     ecran.fill(VERT)
@@ -49,13 +48,22 @@ def dessiner_fond():
 def afficher_menu():
     en_menu = True
     while en_menu:
-        ecran.fill((0, 0, 0))
-        titre = pygame.font.SysFont('comicsansms', 50).render("AMBULANCE EXPRESS", True, BLANC)
-        sous_titre1 = police.render("Flèches pour bouger | Bonne chance sale noob ", True, BLANC)
-        sous_titre2 = police.render("Appuie sur Entrée pour jouer", True, BLANC)
-        ecran.blit(titre, titre.get_rect(center=(LARGEUR//2, 300)))
-        ecran.blit(sous_titre1, sous_titre1.get_rect(center=(LARGEUR//2, 400)))
-        ecran.blit(sous_titre2, sous_titre2.get_rect(center=(LARGEUR//2, 450)))
+        ecran.fill((0, 0, 0))  # Fond noir
+        ecran.blit(menu_img, (0, 0))  # Utilise la variable menu_img
+
+        # Titre avec une police stylisée
+        titre = pygame.font.SysFont("Cascadia Code", 60).render("AMBULANCE EXPRESS", True, (255, 220, 50))
+        sous_titre1 = police.render("Bonne chance, sale noob !", True, (255, 255, 255))
+        sous_titre2 = police.render("Appuie sur Entrée pour jouer", True, (255, 255, 255))
+
+        # Ajout d'ombres pour le titre
+        ecran.blit(titre, titre.get_rect(center=(LARGEUR // 2 + 2, HAUTEUR // 3 + 2)))  # Ombre
+        ecran.blit(titre, titre.get_rect(center=(LARGEUR // 2, HAUTEUR // 3)))  # Titre principal
+
+        # Positionnement des sous titres
+        ecran.blit(sous_titre1, sous_titre1.get_rect(center=(LARGEUR // 2, HAUTEUR // 2)))
+        ecran.blit(sous_titre2, sous_titre2.get_rect(center=(LARGEUR // 2, HAUTEUR // 2 + 40)))
+
         pygame.display.flip()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -63,6 +71,7 @@ def afficher_menu():
                 sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
                 en_menu = False
+
 
 def collision(rect1, rect2):
     return rect1.colliderect(rect2)
@@ -72,7 +81,7 @@ def afficher_vies(vies):
         x = 10 + i * 35
         y = 40
         ecran.blit(Vie_img, (x, y))
-    
+
 def lancer_jeu():
     joueur_x = LARGEUR // 2
     joueur_y = HAUTEUR - 100
@@ -85,6 +94,10 @@ def lancer_jeu():
     vies = 3  # Nombre de vies
     en_jeu = True
     v_voiture = 4
+    niveau_difficulte = 1  # Niveau de difficulté
+    invincible = False  # État d'invincibilité
+    invincibility_timer = 0  # Timer pour l'invincibilité
+    pieces_collectees = 0  # Compteur de pièces collectées
 
     voie_voiture = [((LARGEUR - 300) // 2) + 10, LARGEUR // 2 - 40, ((LARGEUR - 300) // 2) + 210]
 
@@ -111,11 +124,16 @@ def lancer_jeu():
             voiture_x = random.choice(voie_voiture)
             voitures.append([voiture_x, -90])
 
-            # Bonus aléatoires
+            # Bonus aléatoires 
             bonus_voies_dispo = [x for x in voie_voiture if x != voiture_x]
             if random.random() < 0.4 and bonus_voies_dispo:
                 bonus_x = random.choice(bonus_voies_dispo)
                 bonus.append([bonus_x, -30])
+
+            # Bonus d'invincibilité très rare
+            if random.random() < 0.15 and bonus_voies_dispo:  # 15% de chance d'apparition
+                invincibility_x = random.choice(bonus_voies_dispo)
+                bonus.append([invincibility_x, -30])
 
             timer = 0
 
@@ -133,24 +151,53 @@ def lancer_jeu():
         for v in voitures:
             rect_v = pygame.Rect(v[0] + 8, v[1] + 8, 64, 74)
             if collision(rect_joueur, rect_v):
-                vies -= 1
-                voitures.remove(v)
-                if vies <= 0:
-                    en_jeu = False
+                if not invincible:  # Si le joueur n'est pas invincible
+                    vies -= 1
+                    voitures.remove(v)
+                    collision_sound.play()  # Joue le son de collision
+                    if vies <= 0:
+                        en_jeu = False
                 break  # Évite de perdre plusieurs vies d’un coup
 
-        # Collecte bonus
+        # Collecte bonus 
         for b in bonus[:]:
             rect_b = pygame.Rect(b[0], b[1], 20, 20)
             if collision(rect_joueur, rect_b):
-                score += 50
-                bonus.remove(b)
+                if b[1] == -30:  # Bonus d'invincibilité
+                    invincible = True
+                    invincibility_timer = 300  # 5 secondes à 60 FPS
+                    bonus.remove(b)
+                else:
+                    score += 100
+                    pieces_collectees += 1  # Incrémente le compteur de pièces collectées
+                    bonus.remove(b)
+                    bonus_sound.play()  # Joue le son de bonus
+
+                    # Vérifie si le joueur a collecté 5 pièces
+                    if pieces_collectees >= 5:
+                        vies += 1  # Ajoute une vie
+                        pieces_collectees = 0  # Réinitialise le compteur de pièces collectées
+
+        # Gérer l'invincibilité
+        if invincible:
+            invincibility_timer -= 1
+            if invincibility_timer <= 0:
+                invincible = False  # Fin de l'invincibilité
+
+        # Augmenter la difficulté
+        if score // 100 > niveau_difficulte:  # Chaque 100 points
+            niveau_difficulte += 1
+            v_voiture += 1  # Augmente la vitesse des voitures
+            delai = max(20, delai - 5)  # Diminue le délai d'apparition des voitures
 
         ecran.blit(ambulance_img, (joueur_x, joueur_y))
         for v in voitures:
             ecran.blit(voiture_img, (v[0], v[1]))
         for b in bonus:
-            ecran.blit(bonus_img, (b[0], b[1]))
+            if b[1] == -30:  # Bonus d'invincibilité
+                ecran.blit(invincibility_img, (b[0], b[1]))  # Affiche le bonus d'invincibilité
+            else:
+                ecran.blit(bonus_img, (b[0], b[1]))
 
         score += 1  # Score continue à augmenter
         score_txt = police.render("Score : " + str(score), True, BLANC)
@@ -164,11 +211,13 @@ def lancer_jeu():
 def ecran_fin(score):
     continuer = True
     while continuer:
-        ecran.fill((0, 0, 0))
-        texte1 = police.render(f"T'a perdu sale noob XD - Score : {score}", True, BLANC)
-        texte2 = police.render("Entrée pour rejouer | Échap pour quitter", True, BLANC)
-        ecran.blit(texte1, texte1.get_rect(center=(LARGEUR // 2, 380)))
-        ecran.blit(texte2, texte2.get_rect(center=(LARGEUR // 2, 420)))
+        ecran.blit(gameover_img, (0, 0))  # Utilise la variable gameover_img
+        texte1 = police.render(f"T'a perdu sale noob XD - Score : {score}", True, (255, 255, 255))
+        texte2 = police.render("Entrée pour rejouer | Échap pour quitter", True, (255, 255, 255))
+        
+        ecran.blit(texte1, texte1.get_rect(center=(LARGEUR // 2, 180)))
+        ecran.blit(texte2, texte2.get_rect(center=(LARGEUR // 2, 220)))
+        
         pygame.display.flip()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -180,7 +229,6 @@ def ecran_fin(score):
                 elif event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
-
 # Boucle principale
 while True:
     afficher_menu()
